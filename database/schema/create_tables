@@ -1,0 +1,107 @@
+-- =====================================================
+-- ECOPATH - CREATE TABLES
+-- =====================================================
+USE DATABASE ECOPATH_DB;
+USE WAREHOUSE COMPUTE_WH;
+USE SCHEMA PUBLIC;
+
+-- Drop tables if exists (optional - untuk clean setup)
+DROP TABLE IF EXISTS analytics_redistribution_recommendations;
+DROP TABLE IF EXISTS fact_nurse_reports;
+DROP TABLE IF EXISTS fact_weather_data;
+DROP TABLE IF EXISTS fact_stock_transactions;
+DROP TABLE IF EXISTS fact_inventory;
+DROP TABLE IF EXISTS dim_medical_items;
+DROP TABLE IF EXISTS dim_health_facilities;
+
+-- Tabel Fasilitas Kesehatan
+CREATE OR REPLACE TABLE dim_health_facilities (
+    facility_id VARCHAR(20) PRIMARY KEY,
+    facility_name VARCHAR(200) NOT NULL,
+    facility_type VARCHAR(50),
+    district VARCHAR(100),
+    province VARCHAR(100),
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
+    population_coverage INTEGER,
+    accessibility_score INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Tabel Master Obat dan Alat Kesehatan
+CREATE OR REPLACE TABLE dim_medical_items (
+    item_id VARCHAR(20) PRIMARY KEY,
+    item_name VARCHAR(200) NOT NULL,
+    item_category VARCHAR(50),
+    disease_relation VARCHAR(100),
+    unit_measurement VARCHAR(20),
+    min_temperature DECIMAL(5,2),
+    max_temperature DECIMAL(5,2),
+    shelf_life_days INTEGER,
+    critical_item BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Real-time Inventory
+CREATE OR REPLACE TABLE fact_inventory (
+    inventory_id VARCHAR(30) PRIMARY KEY,
+    facility_id VARCHAR(20) NOT NULL,
+    item_id VARCHAR(20) NOT NULL,
+    current_stock INTEGER NOT NULL,
+    min_stock_threshold INTEGER DEFAULT 50,
+    max_stock_capacity INTEGER DEFAULT 1000,
+    expiry_date DATE,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Transaksi Keluar-Masuk Stok
+CREATE OR REPLACE TABLE fact_stock_transactions (
+    transaction_id VARCHAR(30) PRIMARY KEY,
+    facility_id VARCHAR(20) NOT NULL,
+    item_id VARCHAR(20) NOT NULL,
+    transaction_type VARCHAR(10),
+    quantity INTEGER NOT NULL,
+    transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    source_facility VARCHAR(20),
+    notes TEXT
+);
+
+-- Data Cuaca Harian
+CREATE OR REPLACE TABLE fact_weather_data (
+    weather_id VARCHAR(30) PRIMARY KEY,
+    facility_id VARCHAR(20) NOT NULL,
+    date DATE NOT NULL,
+    temperature_avg DECIMAL(5,2),
+    humidity_avg DECIMAL(5,2),
+    rainfall_mm DECIMAL(6,2),
+    weather_condition VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Laporan Perawat
+CREATE OR REPLACE TABLE fact_nurse_reports (
+    report_id VARCHAR(30) PRIMARY KEY,
+    facility_id VARCHAR(20) NOT NULL,
+    report_date DATE NOT NULL,
+    raw_text TEXT,
+    processed_json VARIANT,
+    disease_detected VARCHAR(100),
+    severity_level VARCHAR(20),
+    patient_count INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Redistribution Recommendations
+CREATE OR REPLACE TABLE analytics_redistribution_recommendations (
+    recommendation_id VARCHAR(30) PRIMARY KEY,
+    from_facility_id VARCHAR(20),
+    to_facility_id VARCHAR(20),
+    item_id VARCHAR(20),
+    recommended_quantity INTEGER,
+    priority_score INTEGER,
+    reason TEXT,
+    status VARCHAR(20) DEFAULT 'PENDING',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    approved_by VARCHAR(100),
+    approved_at TIMESTAMP
+);
