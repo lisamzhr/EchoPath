@@ -6,6 +6,7 @@ import com.ecopath.service.WeatherService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.List;
@@ -126,7 +127,30 @@ public class ServiceController {
             response.put("status", "FAILED");
             response.put("error", e.getMessage());
         }
-
         return response;
+    }
+    @GetMapping("/weather/test-url")
+    public Map<String, Object> testWeatherUrl() {
+        // Hardcode test
+        String testUrl = "https://api.openweathermap.org/data/2.5/weather?lat=-6.2088&lon=106.8456&appid=fad1d8600daf04af0c83ebb24bf20d18&units=metric";
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String response = restTemplate.getForObject(testUrl, String.class);
+
+            return Map.of(
+                    "status", "SUCCESS",
+                    "message", "OpenWeather API is working!",
+                    "url_tested", testUrl,
+                    "response", response
+            );
+
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage(),
+                    "url_tested", testUrl
+            );
+        }
     }
 }
