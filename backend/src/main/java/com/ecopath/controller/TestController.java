@@ -71,6 +71,11 @@ public class TestController {
         return response;
     }
 
+    // Add this method to your TestController.java
+
+    /**
+     * Get ALL inventory data (no limit)
+     */
     @GetMapping("/inventory")
     public Map<String, Object> getAllInventory() {
         Map<String, Object> response = new HashMap<>();
@@ -78,7 +83,9 @@ public class TestController {
         try {
             String sql = "SELECT " +
                     "i.inventory_id, " +
+                    "f.facility_id, " +
                     "f.facility_name, " +
+                    "m.item_id, " +
                     "m.item_name, " +
                     "i.current_stock, " +
                     "i.min_stock_threshold " +
@@ -113,7 +120,9 @@ public class TestController {
         try {
             String sql = "SELECT " +
                     "i.inventory_id, " +
+                    "f.facility_id, " +
                     "f.facility_name, " +
+                    "m.item_id, " +
                     "m.item_name, " +
                     "i.current_stock, " +
                     "i.min_stock_threshold " +
