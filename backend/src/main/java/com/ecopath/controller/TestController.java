@@ -198,4 +198,21 @@ public class TestController {
 
         return response;
     }
+    @GetMapping("/endpoints")
+    public Map<String, Object> listEndpoints() {
+        return Map.of(
+                "status", "SUCCESS",
+                "available_endpoints", List.of(
+                        "GET /api/test/health",
+                        "GET /api/test/snowflake",
+                        "GET /api/test/facilities",
+                        "POST /api/services/reports/process",
+                        "POST /api/services/inventory/update",
+                        "GET /api/services/inventory/anomalies",
+                        "POST /api/services/redistribution/generate",
+                        "GET /api/services/redistribution/pending",
+                        "POST /api/services/redistribution/approve"
+                )
+        );
+    }
 }

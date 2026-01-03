@@ -2,6 +2,7 @@ package com.ecopath.controller;
 
 import com.ecopath.service.GeminiService;
 import com.ecopath.service.InventoryService;
+import com.ecopath.service.RedistributionService;
 import com.ecopath.service.WeatherService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,6 +28,9 @@ public class ServiceController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private RedistributionService redistributionService;
 
     /**
      * Fetch weather untuk 1 facility
@@ -56,6 +60,26 @@ public class ServiceController {
                 "status", "SUCCESS",
                 "message", result
         );
+    }
+
+    @GetMapping("/weather/recent")
+    public Map<String, Object> getRecentWeather() {
+        try {
+            String sql = "SELECT w.weather_id, f.facility_name, w.date, " +
+                    "w.temperature_avg, w.humidity_avg, w.rainfall_mm, w.weather_condition " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_weather_data w " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
+                    "  ON w.facility_id = f.facility_id " +
+                    "ORDER BY w.created_at DESC LIMIT 10";
+
+            return Map.of(
+                    "status", "SUCCESS",
+                    "data", "weather data"
+            );
+
+        } catch (Exception e) {
+            return Map.of("status", "FAILED", "error", e.getMessage());
+        }
     }
 
     /**
@@ -152,5 +176,62 @@ public class ServiceController {
                     "url_tested", testUrl
             );
         }
+    }
+    @PostMapping("/redistribution/generate")
+    public Map<String, Object> generateRedistributions() {
+        return redistributionService.generateRecommendations();
+    }
+
+    @GetMapping("/redistribution/pending")
+    public Map<String, Object> getPendingRedistributions() {
+        List<Map<String, Object>> recommendations =
+                redistributionService.getPendingRecommendations();
+
+        return Map.of(
+                "status", "SUCCESS",
+                "count", recommendations.size(),
+                "recommendations", recommendations
+        );
+    }
+
+    @PostMapping("/redistribution/approve")
+    public Map<String, Object> approveRedistribution(@RequestBody Map<String, String> request) {
+        String recId = request.get("recommendationId");
+        String approvedBy = request.get("approvedBy");
+
+        String result = redistributionService.approveRecommendation(recId, approvedBy);
+
+        return Map.of(
+                "status", result.contains("Error") || result.contains("not found") ? "FAILED" : "SUCCESS",
+                "message", result
+        );
+    }
+
+    @GetMapping("/dashboard/summary")
+    public Map<String, Object> getDashboardSummary() {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // Get anomalies
+            Map<String, Object> anomalies = inventoryService.detectAnomalies();
+            int totalIssues = (int) anomalies.getOrDefault("total_issues", 0);
+
+            // Get pending redistributions
+            List<Map<String, Object>> pending = redistributionService.getPendingRecommendations();
+
+            response.put("status", "SUCCESS");
+            response.put("summary", Map.of(
+                    "stock_issues", totalIssues,
+                    "pending_redistributions", pending.size()
+            ));
+            response.put("anomalies", anomalies);
+            response.put("pending_redistributions", pending);
+
+        } catch (Exception e) {
+            response.put("status", "FAILED");
+            response.put("error", e.getMessage());
+        }
+
+        return response;
     }
 }
