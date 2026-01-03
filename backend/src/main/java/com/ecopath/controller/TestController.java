@@ -71,7 +71,6 @@ public class TestController {
         return response;
     }
 
-    // Add this method to your TestController.java
 
     /**
      * Get ALL inventory data (no limit)
@@ -83,17 +82,17 @@ public class TestController {
         try {
             String sql = "SELECT " +
                     "i.inventory_id, " +
-                    "f.facility_id, " +
+                    "i.facility_id, " +
                     "f.facility_name, " +
-                    "m.item_id, " +
+                    "i.item_id, " +
                     "m.item_name, " +
                     "i.current_stock, " +
-                    "i.min_stock_threshold " +
-                    "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
-                    "  ON i.facility_id = f.facility_id " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items m " +
-                    "  ON i.item_id = m.item_id " +
+                    "i.min_stock_threshold, " +
+                    "i.max_stock_capacity, " +
+                    "i.expiry_date " +
+                    "FROM fact_inventory i " +
+                    "JOIN dim_health_facilities f ON i.facility_id = f.facility_id " +
+                    "JOIN dim_medical_items m ON i.item_id = m.item_id " +
                     "ORDER BY f.facility_name, m.item_name";
 
             List<Map<String, Object>> inventoryData = jdbcTemplate.queryForList(sql);
@@ -120,17 +119,17 @@ public class TestController {
         try {
             String sql = "SELECT " +
                     "i.inventory_id, " +
-                    "f.facility_id, " +
+                    "i.facility_id, " +
                     "f.facility_name, " +
-                    "m.item_id, " +
+                    "i.item_id, " +
                     "m.item_name, " +
                     "i.current_stock, " +
-                    "i.min_stock_threshold " +
-                    "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
-                    "  ON i.facility_id = f.facility_id " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items m " +
-                    "  ON i.item_id = m.item_id " +
+                    "i.min_stock_threshold, " +
+                    "i.max_stock_capacity, " +
+                    "i.expiry_date " +
+                    "FROM fact_inventory i " +
+                    "JOIN dim_health_facilities f ON i.facility_id = f.facility_id " +
+                    "JOIN dim_medical_items m ON i.item_id = m.item_id " +
                     "WHERE i.facility_id = ? " +
                     "ORDER BY m.item_name";
 
