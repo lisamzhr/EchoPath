@@ -21,22 +21,48 @@ public class InventoryService {
      */
     public String updateStock(String facilityId, String itemId, int quantity, String type) {
         try {
-            System.out.println("Updating stock: " + type + " " + quantity + " units");
+            System.out.println("📦 Updating stock: " + type + " " + quantity + " units for " + facilityId + " - " + itemId);
 
-            // 1. Update inventory
+            // STEP 1: Check if inventory record exists
+            String checkSql = "SELECT inventory_id, current_stock " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_inventory " +
+                    "WHERE facility_id = ? AND item_id = ?";
+
+            List<Map<String, Object>> existing = jdbcTemplate.queryForList(checkSql, facilityId, itemId);
+
+            if (existing.isEmpty()) {
+                System.err.println("Inventory record not found for: " + facilityId + " - " + itemId);
+                return "Error: Inventory record not found for facility " + facilityId + " and item " + itemId;
+            }
+
+            int currentStock = ((Number) existing.get(0).get("CURRENT_STOCK")).intValue();
+            System.out.println("Current stock: " + currentStock);
+
+            // STEP 2: Calculate new stock
+            int delta = type.equalsIgnoreCase("IN") ? quantity : -quantity;
+            int newStock = currentStock + delta;
+
+            if (newStock < 0) {
+                return "Error: Cannot reduce stock below 0. Current: " + currentStock + ", Requested: " + quantity;
+            }
+
+            System.out.println("New stock will be: " + newStock + " (delta: " + delta + ")");
+
+            // STEP 3: Update inventory
             String updateSql = "UPDATE ECOPATH_DB.PUBLIC.fact_inventory " +
-                    "SET current_stock = current_stock + ?, " +
+                    "SET current_stock = ?, " +
                     "    last_updated = CURRENT_TIMESTAMP() " +
                     "WHERE facility_id = ? AND item_id = ?";
 
-            int delta = type.equalsIgnoreCase("IN") ? quantity : -quantity;
-            int updated = jdbcTemplate.update(updateSql, delta, facilityId, itemId);
+            int updated = jdbcTemplate.update(updateSql, newStock, facilityId, itemId);
 
             if (updated == 0) {
-                return "Error: Inventory record not found";
+                return "Error: Failed to update inventory";
             }
 
-            // 2. Record transaction
+            System.out.println("Stock updated: " + currentStock + " → " + newStock);
+
+            // STEP 4: Record transaction
             String transactionId = "TRX-" + UUID.randomUUID().toString().substring(0, 8);
             String insertSql = "INSERT INTO ECOPATH_DB.PUBLIC.fact_stock_transactions " +
                     "(transaction_id, facility_id, item_id, transaction_type, " +
@@ -44,14 +70,16 @@ public class InventoryService {
                     "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?)";
 
             jdbcTemplate.update(insertSql, transactionId, facilityId, itemId,
-                    type, quantity, "Stock " + type + " via API");
+                    type, quantity, "Stock " + type + " via Dashboard");
 
-            System.out.println("Stock updated: " + facilityId + " - " + itemId);
+            System.out.println("Transaction recorded: " + transactionId);
 
-            return "Stock updated successfully: " + transactionId;
+            return String.format("Stock updated successfully! %s → %s (Transaction: %s)",
+                    currentStock, newStock, transactionId);
 
         } catch (Exception e) {
             System.err.println("Error updating stock: " + e.getMessage());
+            e.printStackTrace();
             return "Error: " + e.getMessage();
         }
     }
