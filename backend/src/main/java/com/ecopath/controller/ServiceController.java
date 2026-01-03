@@ -133,7 +133,7 @@ public class ServiceController {
     }
 
     /**
-     * Update stock - FIXED VERSION
+     * Update stock
      */
     @PostMapping("/inventory/update")
     public Map<String, Object> updateStock(@RequestBody Map<String, Object> request) {
@@ -303,7 +303,7 @@ public class ServiceController {
     }
 
     /**
-     * Approve redistribution - FIXED VERSION
+     * Approve redistribution
      */
     @PostMapping("/redistribution/approve")
     public Map<String, Object> approveRedistribution(@RequestBody Map<String, String> request) {
@@ -323,6 +323,88 @@ public class ServiceController {
             return Map.of(
                     "status", result.contains("Error") || result.contains("not found") ? "FAILED" : "SUCCESS",
                     "message", result
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Get approved redistributions
+     */
+    @GetMapping("/redistribution/approved")
+    public Map<String, Object> getApprovedRedistributions() {
+        try {
+            String sql = "SELECT r.recommendation_id, " +
+                    "       fs.facility_name as source_facility, " +
+                    "       fd.facility_name as destination_facility, " +
+                    "       i.item_name, " +
+                    "       r.quantity_to_move, " +
+                    "       r.priority_score, " +
+                    "       r.status, " +
+                    "       r.approved_by, " +
+                    "       r.approved_at, " +
+                    "       r.created_at " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_redistribution_recommendations r " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
+                    "  ON r.source_facility_id = fs.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
+                    "  ON r.destination_facility_id = fd.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items i " +
+                    "  ON r.item_id = i.item_id " +
+                    "WHERE r.status = 'APPROVED' " +
+                    "ORDER BY r.approved_at DESC";
+
+            List<Map<String, Object>> redistributions = jdbcTemplate.queryForList(sql);
+
+            return Map.of(
+                    "status", "SUCCESS",
+                    "count", redistributions.size(),
+                    "data", redistributions
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Get rejected redistributions
+     */
+    @GetMapping("/redistribution/rejected")
+    public Map<String, Object> getRejectedRedistributions() {
+        try {
+            String sql = "SELECT r.recommendation_id, " +
+                    "       fs.facility_name as source_facility, " +
+                    "       fd.facility_name as destination_facility, " +
+                    "       i.item_name, " +
+                    "       r.quantity_to_move, " +
+                    "       r.priority_score, " +
+                    "       r.status, " +
+                    "       r.approved_by, " +
+                    "       r.approved_at, " +
+                    "       r.created_at " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_redistribution_recommendations r " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
+                    "  ON r.source_facility_id = fs.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
+                    "  ON r.destination_facility_id = fd.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items i " +
+                    "  ON r.item_id = i.item_id " +
+                    "WHERE r.status = 'REJECTED' " +
+                    "ORDER BY r.created_at DESC";
+
+            List<Map<String, Object>> redistributions = jdbcTemplate.queryForList(sql);
+
+            return Map.of(
+                    "status", "SUCCESS",
+                    "count", redistributions.size(),
+                    "data", redistributions
             );
         } catch (Exception e) {
             return Map.of(
