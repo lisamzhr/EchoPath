@@ -15,6 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/services")
+@CrossOrigin(origins = "*") // Allow Streamlit to access
 public class ServiceController {
 
     @Autowired
@@ -37,16 +38,23 @@ public class ServiceController {
      */
     @PostMapping("/weather/fetch")
     public Map<String, Object> fetchWeather(@RequestBody Map<String, Object> request) {
-        String facilityId = (String) request.get("facilityId");
-        double lat = ((Number) request.get("lat")).doubleValue();
-        double lon = ((Number) request.get("lon")).doubleValue();
+        try {
+            String facilityId = (String) request.get("facilityId");
+            double lat = ((Number) request.get("lat")).doubleValue();
+            double lon = ((Number) request.get("lon")).doubleValue();
 
-        String result = weatherService.fetchAndStoreWeather(facilityId, lat, lon);
+            String result = weatherService.fetchAndStoreWeather(facilityId, lat, lon);
 
-        return Map.of(
-                "status", result.contains("Error") ? "FAILED" : "SUCCESS",
-                "message", result
-        );
+            return Map.of(
+                    "status", result.contains("Error") ? "FAILED" : "SUCCESS",
+                    "message", result
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
     /**
@@ -54,12 +62,18 @@ public class ServiceController {
      */
     @PostMapping("/weather/fetch-all")
     public Map<String, Object> fetchWeatherAll() {
-        String result = weatherService.fetchWeatherForAllFacilities();
-
-        return Map.of(
-                "status", "SUCCESS",
-                "message", result
-        );
+        try {
+            String result = weatherService.fetchWeatherForAllFacilities();
+            return Map.of(
+                    "status", "SUCCESS",
+                    "message", result
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
     @GetMapping("/weather/recent")
@@ -72,13 +86,19 @@ public class ServiceController {
                     "  ON w.facility_id = f.facility_id " +
                     "ORDER BY w.created_at DESC LIMIT 10";
 
+            List<Map<String, Object>> weatherData = jdbcTemplate.queryForList(sql);
+
             return Map.of(
                     "status", "SUCCESS",
-                    "data", "weather data"
+                    "count", weatherData.size(),
+                    "data", weatherData
             );
 
         } catch (Exception e) {
-            return Map.of("status", "FAILED", "error", e.getMessage());
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
         }
     }
 
@@ -87,34 +107,80 @@ public class ServiceController {
      */
     @PostMapping("/reports/process")
     public Map<String, Object> processReport(@RequestBody Map<String, String> request) {
-        String facilityId = request.get("facilityId");
-        String rawText = request.get("text");
+        try {
+            String facilityId = request.get("facilityId");
+            String rawText = request.get("text");
 
-        // Gunakan smart version yang bisa update existing report
-        String result = geminiService.processNurseReportSmart(facilityId, rawText);
+            if (facilityId == null || rawText == null || rawText.trim().isEmpty()) {
+                return Map.of(
+                        "status", "FAILED",
+                        "message", "facilityId and text are required"
+                );
+            }
 
-        return Map.of(
-                "status", result.contains("Error") ? "FAILED" : "SUCCESS",
-                "message", result
-        );
+            String result = geminiService.processNurseReportSmart(facilityId, rawText);
+
+            return Map.of(
+                    "status", result.contains("Error") ? "FAILED" : "SUCCESS",
+                    "message", result
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
     /**
-     * Update stock
+     * Update stock - FIXED VERSION
      */
     @PostMapping("/inventory/update")
     public Map<String, Object> updateStock(@RequestBody Map<String, Object> request) {
-        String facilityId = (String) request.get("facilityId");
-        String itemId = (String) request.get("itemId");
-        int quantity = ((Number) request.get("quantity")).intValue();
-        String type = (String) request.get("type"); // "IN" or "OUT"
+        try {
+            // Validate input
+            if (!request.containsKey("facilityId") || !request.containsKey("itemId") ||
+                !request.containsKey("quantity") || !request.containsKey("type")) {
+                return Map.of(
+                        "status", "FAILED",
+                        "message", "Missing required fields: facilityId, itemId, quantity, type"
+                );
+            }
 
-        String result = inventoryService.updateStock(facilityId, itemId, quantity, type);
+            String facilityId = (String) request.get("facilityId");
+            String itemId = (String) request.get("itemId");
+            int quantity = ((Number) request.get("quantity")).intValue();
+            String type = (String) request.get("type");
 
-        return Map.of(
-                "status", result.contains("Error") ? "FAILED" : "SUCCESS",
-                "message", result
-        );
+            // Validate type
+            if (!type.equals("IN") && !type.equals("OUT")) {
+                return Map.of(
+                        "status", "FAILED",
+                        "message", "Type must be 'IN' or 'OUT'"
+                );
+            }
+
+            // Validate quantity
+            if (quantity <= 0) {
+                return Map.of(
+                        "status", "FAILED",
+                        "message", "Quantity must be greater than 0"
+                );
+            }
+
+            String result = inventoryService.updateStock(facilityId, itemId, quantity, type);
+
+            return Map.of(
+                    "status", result.contains("Error") || result.contains("Failed") ? "FAILED" : "SUCCESS",
+                    "message", result
+            );
+
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
     /**
@@ -122,12 +188,19 @@ public class ServiceController {
      */
     @GetMapping("/inventory/anomalies")
     public Map<String, Object> detectAnomalies() {
-        Map<String, Object> anomalies = inventoryService.detectAnomalies();
+        try {
+            Map<String, Object> anomalies = inventoryService.detectAnomalies();
 
-        return Map.of(
-                "status", anomalies.containsKey("error") ? "FAILED" : "SUCCESS",
-                "data", anomalies
-        );
+            return Map.of(
+                    "status", anomalies.containsKey("error") ? "FAILED" : "SUCCESS",
+                    "data", anomalies
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
     @GetMapping("/reports/summary")
@@ -153,9 +226,9 @@ public class ServiceController {
         }
         return response;
     }
+
     @GetMapping("/weather/test-url")
     public Map<String, Object> testWeatherUrl() {
-        // Hardcode test
         String testUrl = "https://api.openweathermap.org/data/2.5/weather?lat=-6.2088&lon=106.8456&appid=fad1d8600daf04af0c83ebb24bf20d18&units=metric";
 
         try {
@@ -177,36 +250,91 @@ public class ServiceController {
             );
         }
     }
+
+    /**
+     * Generate redistribution recommendations - FIXED VERSION
+     */
     @PostMapping("/redistribution/generate")
     public Map<String, Object> generateRedistributions() {
-        return redistributionService.generateRecommendations();
+        try {
+            Map<String, Object> result = redistributionService.generateRecommendations();
+            
+            // Ensure proper response format
+            if (result.containsKey("error")) {
+                return Map.of(
+                        "status", "FAILED",
+                        "error", result.get("error")
+                );
+            }
+            
+            return Map.of(
+                    "status", "SUCCESS",
+                    "data", result
+            );
+            
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
+    /**
+     * Get pending redistributions - FIXED VERSION
+     */
     @GetMapping("/redistribution/pending")
     public Map<String, Object> getPendingRedistributions() {
-        List<Map<String, Object>> recommendations =
-                redistributionService.getPendingRecommendations();
+        try {
+            List<Map<String, Object>> recommendations =
+                    redistributionService.getPendingRecommendations();
 
-        return Map.of(
-                "status", "SUCCESS",
-                "count", recommendations.size(),
-                "recommendations", recommendations
-        );
+            return Map.of(
+                    "status", "SUCCESS",
+                    "count", recommendations.size(),
+                    "recommendations", recommendations
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
+    /**
+     * Approve redistribution - FIXED VERSION
+     */
     @PostMapping("/redistribution/approve")
     public Map<String, Object> approveRedistribution(@RequestBody Map<String, String> request) {
-        String recId = request.get("recommendationId");
-        String approvedBy = request.get("approvedBy");
+        try {
+            String recId = request.get("recommendationId");
+            String approvedBy = request.get("approvedBy");
 
-        String result = redistributionService.approveRecommendation(recId, approvedBy);
+            if (recId == null || approvedBy == null) {
+                return Map.of(
+                        "status", "FAILED",
+                        "message", "recommendationId and approvedBy are required"
+                );
+            }
 
-        return Map.of(
-                "status", result.contains("Error") || result.contains("not found") ? "FAILED" : "SUCCESS",
-                "message", result
-        );
+            String result = redistributionService.approveRecommendation(recId, approvedBy);
+
+            return Map.of(
+                    "status", result.contains("Error") || result.contains("not found") ? "FAILED" : "SUCCESS",
+                    "message", result
+            );
+        } catch (Exception e) {
+            return Map.of(
+                    "status", "FAILED",
+                    "error", e.getMessage()
+            );
+        }
     }
 
+    /**
+     * Dashboard summary
+     */
     @GetMapping("/dashboard/summary")
     public Map<String, Object> getDashboardSummary() {
         Map<String, Object> response = new HashMap<>();
