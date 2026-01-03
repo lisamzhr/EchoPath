@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
@@ -71,31 +72,69 @@ public class TestController {
     }
 
     @GetMapping("/inventory")
-    public Map<String, Object> getInventory() {
+    public Map<String, Object> getAllInventory() {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            String sql = "SELECT i.inventory_id, f.facility_name, m.item_name, " +
-                    "i.current_stock, i.min_stock_threshold " +
+            String sql = "SELECT " +
+                    "i.inventory_id, " +
+                    "f.facility_name, " +
+                    "m.item_name, " +
+                    "i.current_stock, " +
+                    "i.min_stock_threshold " +
                     "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
                     "  ON i.facility_id = f.facility_id " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items m " +
                     "  ON i.item_id = m.item_id " +
-                    "LIMIT 10";
+                    "ORDER BY f.facility_name, m.item_name";
 
-            List<Map<String, Object>> inventory = jdbcTemplate.queryForList(sql);
+            List<Map<String, Object>> inventoryData = jdbcTemplate.queryForList(sql);
 
             response.put("status", "SUCCESS");
-            response.put("count", inventory.size());
-            response.put("data", inventory);
-
-            System.out.println("Fetched " + inventory.size() + " inventory records");
+            response.put("count", inventoryData.size());
+            response.put("data", inventoryData);
 
         } catch (Exception e) {
             response.put("status", "FAILED");
             response.put("error", e.getMessage());
-            e.printStackTrace();
+        }
+
+        return response;
+    }
+
+    /**
+     * Get inventory by facility
+     */
+    @GetMapping("/inventory/by-facility")
+    public Map<String, Object> getInventoryByFacility(@RequestParam String facilityId) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            String sql = "SELECT " +
+                    "i.inventory_id, " +
+                    "f.facility_name, " +
+                    "m.item_name, " +
+                    "i.current_stock, " +
+                    "i.min_stock_threshold " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
+                    "  ON i.facility_id = f.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items m " +
+                    "  ON i.item_id = m.item_id " +
+                    "WHERE i.facility_id = ? " +
+                    "ORDER BY m.item_name";
+
+            List<Map<String, Object>> inventoryData = jdbcTemplate.queryForList(sql, facilityId);
+
+            response.put("status", "SUCCESS");
+            response.put("facilityId", facilityId);
+            response.put("count", inventoryData.size());
+            response.put("data", inventoryData);
+
+        } catch (Exception e) {
+            response.put("status", "FAILED");
+            response.put("error", e.getMessage());
         }
 
         return response;
