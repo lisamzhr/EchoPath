@@ -256,6 +256,111 @@ public class TestController {
 
         return response;
     }
+
+    @GetMapping("/inventory/understocked-raw")
+    public Map<String, Object> testUnderstockedRaw() {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // Query tanpa JOIN untuk lihat data mentah
+            String sql = "SELECT " +
+                    "inventory_id, " +
+                    "facility_id, " +
+                    "item_id, " +
+                    "current_stock, " +
+                    "min_stock_threshold " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_inventory " +
+                    "WHERE current_stock < min_stock_threshold " +
+                    "ORDER BY facility_id, item_id";
+
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+
+            response.put("status", "SUCCESS");
+            response.put("count", results.size());
+            response.put("data", results);
+            response.put("message", "Ini data mentah yang HARUSNYA understocked");
+
+        } catch (Exception e) {
+            response.put("status", "FAILED");
+            response.put("error", e.getMessage());
+            e.printStackTrace();
+        }
+
+        return response;
+    }
+
+    @GetMapping("/inventory/understocked-with-join")
+    public Map<String, Object> testUnderstockedWithJoin() {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // Query dengan JOIN (sama seperti di InventoryService)
+            String sql = "SELECT " +
+                    "f.facility_name, " +
+                    "m.item_name, " +
+                    "i.facility_id, " +
+                    "i.item_id, " +
+                    "i.current_stock, " +
+                    "i.min_stock_threshold " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
+                    "  ON i.facility_id = f.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
+                    "  ON i.item_id = m.item_id " +
+                    "WHERE i.current_stock < i.min_stock_threshold " +
+                    "ORDER BY f.facility_name, m.item_name";
+
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+
+            response.put("status", "SUCCESS");
+            response.put("count", results.size());
+            response.put("data", results);
+            response.put("message", "Ini hasil dengan JOIN");
+
+        } catch (Exception e) {
+            response.put("status", "FAILED");
+            response.put("error", e.getMessage());
+            e.printStackTrace();
+        }
+
+        return response;
+    }
+
+    @GetMapping("/inventory/check-ids")
+    public Map<String, Object> checkFacilityAndItemIds() {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // Cek facility_id yang ada di inventory
+            String facilityCheckSql = "SELECT DISTINCT i.facility_id, f.facility_name " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
+                    "LEFT JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
+                    "  ON i.facility_id = f.facility_id " +
+                    "WHERE i.facility_id LIKE '%Ciwidey%' OR f.facility_name LIKE '%Ciwidey%'";
+
+            List<Map<String, Object>> facilities = jdbcTemplate.queryForList(facilityCheckSql);
+
+            // Cek item_id untuk Amoxicillin
+            String itemCheckSql = "SELECT DISTINCT i.item_id, m.item_name " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
+                    "LEFT JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
+                    "  ON i.item_id = m.item_id " +
+                    "WHERE i.item_id = 'MED003' OR m.item_name LIKE '%Amoxicillin%'";
+
+            List<Map<String, Object>> items = jdbcTemplate.queryForList(itemCheckSql);
+
+            response.put("status", "SUCCESS");
+            response.put("facilities", facilities);
+            response.put("items", items);
+
+        } catch (Exception e) {
+            response.put("status", "FAILED");
+            response.put("error", e.getMessage());
+        }
+
+        return response;
+    }
+
     @GetMapping("/endpoints")
     public Map<String, Object> listEndpoints() {
         return Map.of(

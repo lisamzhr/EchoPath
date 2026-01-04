@@ -89,8 +89,8 @@ public class InventoryService {
      */
     public Map<String, Object> detectAnomalies() {
         try {
-            // Understocked items
-            String underSql = "SELECT f.facility_name, m.item_name, " +
+            // Understocked items - TAMBAHKAN DISTINCT
+            String underSql = "SELECT DISTINCT f.facility_name, m.item_name, " +
                     "i.current_stock, i.min_stock_threshold " +
                     "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
@@ -101,8 +101,8 @@ public class InventoryService {
 
             List<Map<String, Object>> understocked = jdbcTemplate.queryForList(underSql);
 
-            // Overstocked items
-            String overSql = "SELECT f.facility_name, m.item_name, " +
+            // Overstocked items - TAMBAHKAN DISTINCT
+            String overSql = "SELECT DISTINCT f.facility_name, m.item_name, " +
                     "i.current_stock, i.max_stock_capacity " +
                     "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f " +
@@ -113,8 +113,8 @@ public class InventoryService {
 
             List<Map<String, Object>> overstocked = jdbcTemplate.queryForList(overSql);
 
-            // Near expiry items
-            String expirySql = "SELECT f.facility_name, m.item_name, " +
+            // Near expiry items - TAMBAHKAN DISTINCT
+            String expirySql = "SELECT DISTINCT f.facility_name, m.item_name, " +
                     "i.current_stock, i.expiry_date, " +
                     "DATEDIFF(day, CURRENT_DATE(), i.expiry_date) as days_until_expiry " +
                     "FROM ECOPATH_DB.PUBLIC.fact_inventory i " +
