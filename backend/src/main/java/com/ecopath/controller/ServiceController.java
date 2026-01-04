@@ -342,17 +342,18 @@ public class ServiceController {
                     "       fs.facility_name as source_facility, " +
                     "       fd.facility_name as destination_facility, " +
                     "       m.item_name, " +
-                    "       r.quantity_to_move, " +
+                    "       r.recommended_quantity, " +
                     "       r.priority_score, " +
                     "       r.status, " +
+                    "       r.reason, " +
                     "       r.approved_by, " +
                     "       r.approved_at, " +
                     "       r.created_at " +
                     "FROM ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS r " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
-                    "  ON r.source_facility_id = fs.facility_id " +
+                    "  ON r.from_facility_id = fs.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
-                    "  ON r.destination_facility_id = fd.facility_id " +
+                    "  ON r.to_facility_id = fd.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
                     "  ON r.item_id = m.item_id " +
                     "WHERE r.status = 'APPROVED' " +

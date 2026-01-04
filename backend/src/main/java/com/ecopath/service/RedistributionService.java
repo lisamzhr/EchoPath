@@ -109,7 +109,7 @@ public class RedistributionService {
                                     "distance_km", String.format("%.1f", distance)
                             ));
 
-                            System.out.println("✅ Recommendation: " +
+                            System.out.println("Recommendation: " +
                                     over.get("FACILITY_NAME") + " → " + under.get("FACILITY_NAME") +
                                     " (" + transferQty + " " + over.get("ITEM_NAME") + ")");
                         }
@@ -168,28 +168,35 @@ public class RedistributionService {
         try {
             String sql = "SELECT " +
                     "r.recommendation_id, " +
-                    "r.source_facility_id, " +
-                    "r.destination_facility_id, " +
+                    "r.from_facility_id, " +
+                    "r.to_facility_id, " +
                     "r.item_id, " +
-                    "r.quantity_to_move, " +
+                    "r.recommended_quantity, " +
                     "r.priority_score, " +
                     "r.status, " +
+                    "r.reason, " +
                     "r.created_at, " +
                     "fs.facility_name as from_facility_name, " +
                     "fd.facility_name as to_facility_name, " +
                     "m.item_name, " +
-                    "r.source_current_stock as from_current_stock, " +
-                    "r.destination_current_stock as to_current_stock, " +
-                    "(r.source_current_stock - r.quantity_to_move) as from_after_stock, " +
-                    "(r.destination_current_stock + r.quantity_to_move) as to_after_stock, " +
+                    "inv_from.current_stock as from_current_stock, " +
+                    "inv_to.current_stock as to_current_stock, " +
+                    "(inv_from.current_stock - r.recommended_quantity) as from_after_stock, " +
+                    "(inv_to.current_stock + r.recommended_quantity) as to_after_stock, " +
                     "r.priority_score as priority " +
                     "FROM ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS r " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
-                    "  ON r.source_facility_id = fs.facility_id " +
+                    "  ON r.from_facility_id = fs.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
-                    "  ON r.destination_facility_id = fd.facility_id " +
+                    "  ON r.to_facility_id = fd.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
                     "  ON r.item_id = m.item_id " +
+                    "LEFT JOIN ECOPATH_DB.PUBLIC.fact_inventory inv_from " +
+                    "  ON r.from_facility_id = inv_from.facility_id " +
+                    "  AND r.item_id = inv_from.item_id " +
+                    "LEFT JOIN ECOPATH_DB.PUBLIC.fact_inventory inv_to " +
+                    "  ON r.to_facility_id = inv_to.facility_id " +
+                    "  AND r.item_id = inv_to.item_id " +
                     "WHERE r.status = 'PENDING' " +
                     "ORDER BY r.priority_score DESC, r.created_at DESC";
 
@@ -221,10 +228,10 @@ public class RedistributionService {
             }
 
             Map<String, Object> rec = results.get(0);
-            String sourceFacilityId = (String) rec.get("SOURCE_FACILITY_ID");
-            String destFacilityId = (String) rec.get("DESTINATION_FACILITY_ID");
+            String fromFacilityId = (String) rec.get("FROM_FACILITY_ID");
+            String toFacilityId = (String) rec.get("TO_FACILITY_ID");
             String itemId = (String) rec.get("ITEM_ID");
-            int quantity = ((Number) rec.get("QUANTITY_TO_MOVE")).intValue();
+            int quantity = ((Number) rec.get("RECOMMENDED_QUANTITY")).intValue();
 
             // Update status to APPROVED
             String updateSql = "UPDATE ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS " +
@@ -242,7 +249,7 @@ public class RedistributionService {
                     "    last_updated = CURRENT_TIMESTAMP() " +
                     "WHERE facility_id = ? AND item_id = ?";
 
-            jdbcTemplate.update(reduceStockSql, quantity, sourceFacilityId, itemId);
+            jdbcTemplate.update(reduceStockSql, quantity, fromFacilityId, itemId);
 
             // Add to destination
             String addStockSql = "UPDATE ECOPATH_DB.PUBLIC.fact_inventory " +
@@ -250,7 +257,23 @@ public class RedistributionService {
                     "    last_updated = CURRENT_TIMESTAMP() " +
                     "WHERE facility_id = ? AND item_id = ?";
 
-            jdbcTemplate.update(addStockSql, quantity, destFacilityId, itemId);
+            jdbcTemplate.update(addStockSql, quantity, toFacilityId, itemId);
+
+            // Record transaction for both facilities
+            String transactionId = "TRX-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+
+            String insertTransactionSql = "INSERT INTO ECOPATH_DB.PUBLIC.fact_stock_transactions " +
+                    "(transaction_id, facility_id, item_id, transaction_type, " +
+                    "quantity, transaction_date, notes) " +
+                    "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?)";
+
+            // OUT from source
+            jdbcTemplate.update(insertTransactionSql, transactionId + "-OUT", fromFacilityId, itemId,
+                    "OUT", quantity, "Redistribution to another facility");
+
+            // IN to destination
+            jdbcTemplate.update(insertTransactionSql, transactionId + "-IN", toFacilityId, itemId,
+                    "IN", quantity, "Redistribution from another facility");
 
             System.out.println("Approved redistribution: " + recommendationId);
 
