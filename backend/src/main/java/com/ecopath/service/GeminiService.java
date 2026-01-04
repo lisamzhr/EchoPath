@@ -76,7 +76,7 @@ public class GeminiService {
             // 1. Prepare prompt untuk Gemini
             String prompt = "Analisis laporan kesehatan berikut dan ekstrak informasi dalam format JSON. " +
                     "Berikan HANYA JSON tanpa teks lain, dengan struktur: " +
-                    "{\"disease\": \"nama penyakit\", \"severity\": \"Low/Medium/High/Critical\", \"patient_count\": angka}. " +
+                    "{\"disease\": \"nama penyakit\", \"severity\": \"LOW/MEDIUM/HIGH/CRITICAL\", \"patient_count\": angka}. " +
                     "Gunakan nama penyakit standar seperti: DBD, ISPA, Diare, COVID-19, Demam Tifoid, Malaria. " +
                     "Laporan: " + rawText;
 
