@@ -21,7 +21,7 @@ st.set_page_config(
 # THEME STATE
 # ========================================
 if 'theme' not in st.session_state:
-    st.session_state.theme = 'dark'
+    st.session_state.theme = 'light'
 
 def toggle_theme():
     st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
@@ -131,7 +131,7 @@ def api_post(endpoint, payload):
 # ========================================
 # SIDEBAR
 # ========================================
-st.sidebar.title("🏥 EcoPath Dashboard")
+st.sidebar.title("EcoPath Dashboard")
 
 col1, col2 = st.sidebar.columns([3, 1])
 with col1:
@@ -239,7 +239,7 @@ if page == "Dashboard":
 elif page == "Nurse Reports":
     st.title("Nurse Report Processing")
     
-    tab1, tab2 = st.tabs(["➕ Submit Report", "📑 View Reports"])
+    tab1, tab2 = st.tabs(["Submit Report", "View Reports"])
     
     with tab1:
         st.subheader("Submit New Report")
@@ -263,7 +263,7 @@ elif page == "Nurse Reports":
         with col2:
             report_text = st.text_area(
                 "Report Details",
-                placeholder="e.g., Ada 15 pasien dengan gejala DBD hari ini, 3 pasien parah",
+                placeholder="e.g., 15 patients with severe dengue fever symptoms today",
                 height=150
             )
         
@@ -282,7 +282,7 @@ elif page == "Nurse Reports":
                         st.markdown(f'<div class="error-box">✗ Error: {result.get("message", result.get("error"))}</div>', 
                                   unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Please enter report text")
+                st.warning("Please enter report text")
     
     with tab2:
         st.subheader("All Reports")
@@ -350,23 +350,149 @@ elif page == "Inventory":
             df_inventory = pd.DataFrame(inventory_data.get("data", []))
             
             if not df_inventory.empty:
-                st.dataframe(df_inventory, use_container_width=True)
+                # Normalize column names (handle both upper and lower case)
+                df_inventory.columns = df_inventory.columns.str.upper()
                 
-                fig = px.bar(
-                    df_inventory.head(10),
-                    x='ITEM_NAME',
-                    y='CURRENT_STOCK',
-                    title='Stock Levels (Top 10 Items)',
-                    labels={'CURRENT_STOCK': 'Stock Quantity'},
-                    color='CURRENT_STOCK',
-                    color_continuous_scale='Purples'
+                # Check if required columns exist
+                required_cols = ['FACILITY_ID', 'ITEM_NAME', 'CURRENT_STOCK']
+                missing_cols = [col for col in required_cols if col not in df_inventory.columns]
+                
+                if missing_cols:
+                    st.error(f"Missing columns: {', '.join(missing_cols)}")
+                    st.info(f"Available columns: {', '.join(df_inventory.columns.tolist())}")
+                else:
+                    # Filter and Sort Section
+                    st.markdown("### 🔍 Filter & Sort Options")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        # Filter by Facility
+                        facilities = ["All"] + sorted(df_inventory['FACILITY_ID'].unique().tolist())
+                        selected_facility = st.selectbox(
+                            "Filter by Facility",
+                            facilities,
+                            key="filter_facility"
+                        )
+                
+                with col2:
+                    # Sort by Stock
+                    sort_stock = st.selectbox(
+                        "Sort by Stock Level",
+                        ["Default", "Highest Stock First", "Lowest Stock First"],
+                        key="sort_stock"
+                    )
+                
+                with col3:
+                    # Filter by Item Name (search)
+                    search_item = st.text_input(
+                        "Search Item Name",
+                        placeholder="Type to search...",
+                        key="search_item"
+                    )
+                
+                # Apply filters
+                df_filtered = df_inventory.copy()
+                
+                if selected_facility != "All":
+                    df_filtered = df_filtered[df_filtered['FACILITY_ID'] == selected_facility]
+                
+                if search_item:
+                    df_filtered = df_filtered[
+                        df_filtered['ITEM_NAME'].str.contains(search_item, case=False, na=False)
+                    ]
+                
+                # Apply sorting
+                if sort_stock == "Highest Stock First":
+                    df_filtered = df_filtered.sort_values('CURRENT_STOCK', ascending=False)
+                elif sort_stock == "Lowest Stock First":
+                    df_filtered = df_filtered.sort_values('CURRENT_STOCK', ascending=True)
+                
+                # Display filtered count
+                st.markdown(f"**Showing {len(df_filtered)} of {len(df_inventory)} items**")
+                
+                # Display dataframe with all data
+                st.dataframe(
+                    df_filtered,
+                    use_container_width=True,
+                    height=400
                 )
-                fig.update_layout(
-                    template='plotly_dark' if st.session_state.theme == 'dark' else 'plotly_white',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                
+                # Visualization section
+                st.markdown("### 📊 Stock Visualization")
+                
+                viz_col1, viz_col2 = st.columns(2)
+                
+                with viz_col1:
+                    # Show top 10 or filtered data
+                    chart_data = df_filtered.head(10) if len(df_filtered) > 10 else df_filtered
+                    
+                    fig = px.bar(
+                        chart_data,
+                        x='ITEM_NAME',
+                        y='CURRENT_STOCK',
+                        title=f'Stock Levels (Top {len(chart_data)} Items)',
+                        labels={'CURRENT_STOCK': 'Stock Quantity'},
+                        color='CURRENT_STOCK',
+                        color_continuous_scale='Purples',
+                        text='CURRENT_STOCK'
+                    )
+                    fig.update_traces(textposition='outside')
+                    fig.update_layout(
+                        template='plotly_dark' if st.session_state.theme == 'dark' else 'plotly_white',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis_tickangle=-45
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with viz_col2:
+                    # Stock distribution by facility (if showing all facilities)
+                    if selected_facility == "All":
+                        facility_stock = df_filtered.groupby('FACILITY_ID')['CURRENT_STOCK'].sum().reset_index()
+                        
+                        fig2 = px.pie(
+                            facility_stock,
+                            values='CURRENT_STOCK',
+                            names='FACILITY_ID',
+                            title='Stock Distribution by Facility'
+                        )
+                        fig2.update_layout(
+                            template='plotly_dark' if st.session_state.theme == 'dark' else 'plotly_white',
+                            paper_bgcolor='rgba(0,0,0,0)'
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+                    else:
+                        # Show item distribution for selected facility
+                        fig2 = px.pie(
+                            df_filtered.head(10),
+                            values='CURRENT_STOCK',
+                            names='ITEM_NAME',
+                            title=f'Item Distribution - {selected_facility}'
+                        )
+                        fig2.update_layout(
+                            template='plotly_dark' if st.session_state.theme == 'dark' else 'plotly_white',
+                            paper_bgcolor='rgba(0,0,0,0)'
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+                
+                # Summary statistics
+                st.markdown("### 📈 Summary Statistics")
+                stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+                
+                with stat_col1:
+                    st.metric("Total Items", len(df_filtered))
+                
+                with stat_col2:
+                    st.metric("Total Stock", f"{df_filtered['CURRENT_STOCK'].sum():,}")
+                
+                with stat_col3:
+                    st.metric("Avg Stock", f"{df_filtered['CURRENT_STOCK'].mean():.0f}")
+                
+                with stat_col4:
+                    facilities_count = df_filtered['FACILITY_ID'].nunique()
+                    st.metric("Facilities", facilities_count)
+                
             else:
                 st.markdown('<div class="info-box">No inventory data available</div>', unsafe_allow_html=True)
         else:
@@ -376,15 +502,33 @@ elif page == "Inventory":
     with tab2:
         st.subheader("Update Stock Transaction")
         
+        # Get facilities from API
+        facilities_data = api_get("/test/facilities")
+        facility_options = []
+        
+        if facilities_data.get("status") == "SUCCESS":
+            facilities = facilities_data.get("data", [])
+            facility_options = [f"{f['FACILITY_ID']} - {f['FACILITY_NAME']}" for f in facilities]
+        
         col1, col2 = st.columns(2)
         
         with col1:
-            facility_id = st.selectbox(
-                "Facility ID",
-                ["PKM001", "PKM002", "PKM003", "PKM004", "PKM005",
-                 "PKM006", "PKM007", "PKM008", "PKM009", "PKM010"],
-                key="inv_facility"
-            )
+            if facility_options:
+                selected_facility = st.selectbox(
+                    "Select Facility",
+                    facility_options,
+                    key="inv_facility"
+                )
+                facility_id = selected_facility.split(" - ")[0]
+            else:
+                # Fallback: manual input dengan semua PKM
+                st.warning("⚠️ Could not fetch facilities from API. Using manual input.")
+                facility_id = st.selectbox(
+                    "Facility ID",
+                    ["PKM001", "PKM002", "PKM003", "PKM004", "PKM005", 
+                     "PKM006", "PKM007", "PKM008", "PKM009", "PKM010"],
+                    key="inv_facility_fallback"
+                )
             
             item_id = st.selectbox(
                 "Item ID",
@@ -415,36 +559,48 @@ elif page == "Inventory":
     
     with tab3:
         st.subheader("Stock Anomalies Detection")
-        
+
         if st.button("Detect Anomalies", type="primary"):
             with st.spinner("Analyzing inventory..."):
                 anomalies_data = api_get("/services/inventory/anomalies")
-                
+
                 if anomalies_data.get("status") == "SUCCESS":
                     anomalies = anomalies_data.get("data", {})
-                    
+
+                    # FIX: Ganti key names sesuai backend response
+                    understocked = anomalies.get('understocked', [])
+                    near_expiry = anomalies.get('near_expiry', [])
+                    overstocked = anomalies.get('overstocked', [])
+
                     col1, col2, col3 = st.columns(3)
-                    
+
                     with col1:
-                        st.metric("Low Stock", len(anomalies.get('low_stock', [])))
+                        st.metric("Low Stock", len(understocked))
                     with col2:
-                        st.metric("Expiring Soon", len(anomalies.get('expiring_soon', [])))
+                        st.metric("Expiring Soon", len(near_expiry))
                     with col3:
-                        st.metric("Overstock", len(anomalies.get('overstock', [])))
-                    
-                    if anomalies.get('low_stock'):
-                        st.warning("Low Stock Items")
-                        st.json(anomalies['low_stock'])
-                    
-                    if anomalies.get('expiring_soon'):
-                        st.warning("Items Expiring Soon")
-                        st.json(anomalies['expiring_soon'])
-                    
-                    if anomalies.get('overstock'):
-                        st.info("Overstock Items")
-                        st.json(anomalies['overstock'])
-                    
-                    if not any([anomalies.get('low_stock'), anomalies.get('expiring_soon'), anomalies.get('overstock')]):
+                        st.metric("Overstock", len(overstocked))
+
+                    # Show understocked items
+                    if understocked:
+                        st.warning("⚠️ Low Stock Items")
+                        df_under = pd.DataFrame(understocked)
+                        st.dataframe(df_under, use_container_width=True)
+
+                    # Show near expiry items
+                    if near_expiry:
+                        st.warning("⏰ Items Expiring Soon")
+                        df_expiry = pd.DataFrame(near_expiry)
+                        st.dataframe(df_expiry, use_container_width=True)
+
+                    # Show overstocked items
+                    if overstocked:
+                        st.info("📦 Overstock Items")
+                        df_over = pd.DataFrame(overstocked)
+                        st.dataframe(df_over, use_container_width=True)
+
+                    # No anomalies
+                    if not any([understocked, near_expiry, overstocked]):
                         st.markdown('<div class="success-box">✓ No anomalies detected! All stock levels are healthy.</div>', 
                                   unsafe_allow_html=True)
                 else:
@@ -452,7 +608,7 @@ elif page == "Inventory":
                               unsafe_allow_html=True)
 
 # ========================================
-# PAGE: REDISTRIBUTION (NEW!)
+# PAGE: REDISTRIBUTION 
 # ========================================
 elif page == "Redistribution":
     st.title("Stock Redistribution Management")
@@ -552,41 +708,61 @@ elif page == "Redistribution":
                                             st.success(f"{approve_result.get('message')}")
                                             st.rerun()
                                         else:
-                                            st.error(f"❌ {approve_result.get('message', approve_result.get('error'))}")
+                                            st.error(f" {approve_result.get('message', approve_result.get('error'))}")
                                 else:
                                     st.warning("Please enter approver name")
             else:
                 st.markdown('<div class="info-box">No pending recommendations. Generate new ones in the "Generate" tab.</div>', 
                           unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="error-box">❌ Failed to fetch: {pending_data.get("error")}</div>', 
+            st.markdown(f'<div class="error-box"> Failed to fetch: {pending_data.get("error")}</div>', 
                       unsafe_allow_html=True)
     
     with tab3:
         st.subheader("Approved Redistributions History")
-        
-        try:
-            # Query approved redistributions
-            approved_sql = """
-            SELECT r.*, 
-                   from_f.facility_name as from_facility_name,
-                   to_f.facility_name as to_facility_name,
-                   m.item_name
-            FROM fact_redistribution_recommendations r
-            JOIN dim_health_facilities from_f ON r.from_facility_id = from_f.facility_id
-            JOIN dim_health_facilities to_f ON r.to_facility_id = to_f.facility_id
-            JOIN dim_medical_items m ON r.item_id = m.item_id
-            WHERE r.status = 'APPROVED'
-            ORDER BY r.approved_at DESC
-            LIMIT 20
-            """
-            
-            # This would need to be implemented via API endpoint
-            st.markdown('<div class="info-box">Approved redistributions will be shown here. Add endpoint: GET /services/redistribution/approved</div>', 
+
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("Refresh History", use_container_width=True):
+                st.rerun()
+
+        # FIX: Call actual endpoint
+        approved_data = api_get("/services/redistribution/approved")
+
+        if approved_data.get("status") == "SUCCESS":
+            approved_list = approved_data.get("data", [])
+
+            if approved_list:
+                st.metric("Total Approved", len(approved_list))
+
+                # Convert to DataFrame for better display
+                df_approved = pd.DataFrame(approved_list)
+
+                # Rename columns for display
+                column_mapping = {
+                    'RECOMMENDATION_ID': 'ID',
+                    'SOURCE_FACILITY': 'From Facility',
+                    'DESTINATION_FACILITY': 'To Facility',
+                    'ITEM_NAME': 'Item',
+                    'QUANTITY_TO_MOVE': 'Quantity',
+                    'PRIORITY_SCORE': 'Priority',
+                    'APPROVED_BY': 'Approved By',
+                    'APPROVED_AT': 'Approved Date',
+                    'STATUS': 'Status'
+                }
+
+                # Select and rename columns
+                display_cols = [col for col in column_mapping.keys() if col in df_approved.columns]
+                df_display = df_approved[display_cols].rename(columns=column_mapping)
+
+                st.dataframe(df_display, use_container_width=True)
+
+            else:
+                st.markdown('<div class="info-box">No approved redistributions yet.</div>', 
+                          unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="error-box">❌ Failed to fetch: {approved_data.get("error")}</div>', 
                       unsafe_allow_html=True)
-            
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
 
 # ========================================
 # PAGE: WEATHER
@@ -607,21 +783,37 @@ elif page == "Weather":
             if not df_weather.empty:
                 st.dataframe(df_weather, use_container_width=True)
                 
-                fig = px.line(
+                # --- FIX DATE ---
+                df_weather['DATE'] = pd.to_datetime(df_weather['DATE'], errors='coerce')
+
+                # Sort biar urut
+                df_weather = df_weather.sort_values(['FACILITY_NAME', 'DATE'])
+
+                # Bikin index waktu buatan per facility
+                df_weather['TIME_INDEX'] = df_weather.groupby('FACILITY_NAME').cumcount()
+
+                fig = px.bar(
                     df_weather,
-                    x='DATE',
+                    x='FACILITY_NAME',
                     y='TEMPERATURE_AVG',
-                    color='FACILITY_NAME',
-                    title='Temperature Trends',
+                    title='Current Average Temperature per Facility',
                     labels={'TEMPERATURE_AVG': 'Temperature (°C)'},
-                    color_discrete_sequence=px.colors.sequential.Purples
+                    color='TEMPERATURE_AVG',
+                    color_continuous_scale='RdYlBu_r'
                 )
+
                 fig.update_layout(
+                    xaxis_tickangle=-30,
                     template='plotly_dark' if st.session_state.theme == 'dark' else 'plotly_white',
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)'
                 )
-                st.plotly_chart(fig, use_container_width=True)
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    key="weather_temperature_chart"
+                )
             else:
                 st.markdown('<div class="info-box">No weather data available</div>', unsafe_allow_html=True)
         else:
@@ -636,7 +828,7 @@ elif page == "Weather":
         with col1:
             facility_id = st.selectbox(
                 "Facility ID",
-                ["PKM001", "PKM002", "PKM003", "PKM004", "PKM005"],
+                ["PKM001", "PKM002", "PKM003", "PKM004", "PKM005", "PKM006", "PKM007", "PKM008", "PKM009", "PKM0010"],
                 key="weather_facility"
             )
             lat = st.number_input("Latitude", value=-7.1234, format="%.6f")
