@@ -676,9 +676,9 @@ elif page == "Redistribution":
                         
                         with col3:
                             st.write("**Details:**")
-                            st.write(f"Quantity: {rec.get('QUANTITY', 0)}")
-                            st.write(f"Priority: {rec.get('PRIORITY', 'N/A')}")
-                            st.write(f"Created: {rec.get('CREATED_AT', 'N/A')}")
+                            st.write(f"Quantity: {rec.get('RECOMMENDED_QUANTITY', 0)}")  # ✅ GANTI INI
+                            st.write(f"Priority: {rec.get('PRIORITY_SCORE', 'N/A')}")    # ✅ GANTI INI
+                            st.write(f"Reason: {rec.get('REASON', 'N/A')[:50]}...")      # ✅ GANTI INI
                         
                         st.divider()
                         
@@ -708,14 +708,14 @@ elif page == "Redistribution":
                                             st.success(f"{approve_result.get('message')}")
                                             st.rerun()
                                         else:
-                                            st.error(f" {approve_result.get('message', approve_result.get('error'))}")
+                                            st.error(f"{approve_result.get('message', approve_result.get('error'))}")
                                 else:
                                     st.warning("Please enter approver name")
             else:
-                st.markdown('<div class="info-box">No pending recommendations. Generate new ones in the "Generate" tab.</div>', 
+                st.markdown('<div class="info-box">📋 No pending recommendations. Generate new ones in the "Generate" tab.</div>', 
                           unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="error-box"> Failed to fetch: {pending_data.get("error")}</div>', 
+            st.markdown(f'<div class="error-box">❌ Failed to fetch: {pending_data.get("error")}</div>', 
                       unsafe_allow_html=True)
     
     with tab3:
@@ -726,7 +726,6 @@ elif page == "Redistribution":
             if st.button("Refresh History", use_container_width=True):
                 st.rerun()
 
-        # FIX: Call actual endpoint
         approved_data = api_get("/services/redistribution/approved")
 
         if approved_data.get("status") == "SUCCESS":
@@ -735,30 +734,29 @@ elif page == "Redistribution":
             if approved_list:
                 st.metric("Total Approved", len(approved_list))
 
-                # Convert to DataFrame for better display
                 df_approved = pd.DataFrame(approved_list)
 
-                # Rename columns for display
+                # ✅ FIX: Ganti column mapping sesuai backend response
                 column_mapping = {
                     'RECOMMENDATION_ID': 'ID',
-                    'SOURCE_FACILITY': 'From Facility',
-                    'DESTINATION_FACILITY': 'To Facility',
+                    'SOURCE_FACILITY': 'From Facility',           # Backend return SOURCE_FACILITY
+                    'DESTINATION_FACILITY': 'To Facility',        # Backend return DESTINATION_FACILITY
                     'ITEM_NAME': 'Item',
-                    'QUANTITY_TO_MOVE': 'Quantity',
+                    'RECOMMENDED_QUANTITY': 'Quantity',           # ✅ GANTI INI
                     'PRIORITY_SCORE': 'Priority',
+                    'REASON': 'Reason',                           # ✅ TAMBAH INI
                     'APPROVED_BY': 'Approved By',
                     'APPROVED_AT': 'Approved Date',
                     'STATUS': 'Status'
                 }
 
-                # Select and rename columns
                 display_cols = [col for col in column_mapping.keys() if col in df_approved.columns]
                 df_display = df_approved[display_cols].rename(columns=column_mapping)
 
                 st.dataframe(df_display, use_container_width=True)
 
             else:
-                st.markdown('<div class="info-box">No approved redistributions yet.</div>', 
+                st.markdown('<div class="info-box">📋 No approved redistributions yet.</div>', 
                           unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="error-box">❌ Failed to fetch: {approved_data.get("error")}</div>', 
