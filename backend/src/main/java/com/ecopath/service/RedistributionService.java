@@ -175,33 +175,28 @@ public class RedistributionService {
                     "r.priority_score, " +
                     "r.status, " +
                     "r.created_at, " +
-                    // FIX: Tambahkan alias yang match dengan frontend
                     "fs.facility_name as from_facility_name, " +
                     "fd.facility_name as to_facility_name, " +
                     "m.item_name, " +
-                    // Current stock info
-                    "inv_from.current_stock as from_current_stock, " +
-                    "inv_to.current_stock as to_current_stock, " +
-                    // After stock calculation
-                    "(inv_from.current_stock - r.quantity_to_move) as from_after_stock, " +
-                    "(inv_to.current_stock + r.quantity_to_move) as to_after_stock " +
-                    "FROM ECOPATH_DB.PUBLIC.fact_redistribution_recommendations r " +
+                    "r.source_current_stock as from_current_stock, " +
+                    "r.destination_current_stock as to_current_stock, " +
+                    "(r.source_current_stock - r.quantity_to_move) as from_after_stock, " +
+                    "(r.destination_current_stock + r.quantity_to_move) as to_after_stock, " +
+                    "r.priority_score as priority " +
+                    "FROM ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS r " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
                     "  ON r.source_facility_id = fs.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
                     "  ON r.destination_facility_id = fd.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
                     "  ON r.item_id = m.item_id " +
-                    "LEFT JOIN ECOPATH_DB.PUBLIC.fact_inventory inv_from " +
-                    "  ON r.source_facility_id = inv_from.facility_id " +
-                    "  AND r.item_id = inv_from.item_id " +
-                    "LEFT JOIN ECOPATH_DB.PUBLIC.fact_inventory inv_to " +
-                    "  ON r.destination_facility_id = inv_to.facility_id " +
-                    "  AND r.item_id = inv_to.item_id " +
                     "WHERE r.status = 'PENDING' " +
                     "ORDER BY r.priority_score DESC, r.created_at DESC";
 
-            return jdbcTemplate.queryForList(sql);
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+            System.out.println("Pending recommendations found: " + results.size());
+
+            return results;
 
         } catch (Exception e) {
             System.err.println("Error getting pending recommendations: " + e.getMessage());
@@ -215,22 +210,55 @@ public class RedistributionService {
      */
     public String approveRecommendation(String recommendationId, String approvedBy) {
         try {
-            String sql = "UPDATE ECOPATH_DB.PUBLIC.analytics_redistribution_recommendations " +
+            // Get recommendation details
+            String selectSql = "SELECT * FROM ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS " +
+                    "WHERE recommendation_id = ?";
+
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(selectSql, recommendationId);
+
+            if (results.isEmpty()) {
+                return "Error: Recommendation not found";
+            }
+
+            Map<String, Object> rec = results.get(0);
+            String sourceFacilityId = (String) rec.get("SOURCE_FACILITY_ID");
+            String destFacilityId = (String) rec.get("DESTINATION_FACILITY_ID");
+            String itemId = (String) rec.get("ITEM_ID");
+            int quantity = ((Number) rec.get("QUANTITY_TO_MOVE")).intValue();
+
+            // Update status to APPROVED
+            String updateSql = "UPDATE ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS " +
                     "SET status = 'APPROVED', " +
                     "    approved_by = ?, " +
                     "    approved_at = CURRENT_TIMESTAMP() " +
                     "WHERE recommendation_id = ?";
 
-            int updated = jdbcTemplate.update(sql, approvedBy, recommendationId);
+            jdbcTemplate.update(updateSql, approvedBy, recommendationId);
 
-            if (updated > 0) {
-                System.out.println("Recommendation approved: " + recommendationId);
-                return "Recommendation approved successfully";
-            } else {
-                return "Recommendation not found";
-            }
+            // Update inventory stocks
+            // Reduce from source
+            String reduceStockSql = "UPDATE ECOPATH_DB.PUBLIC.fact_inventory " +
+                    "SET current_stock = current_stock - ?, " +
+                    "    last_updated = CURRENT_TIMESTAMP() " +
+                    "WHERE facility_id = ? AND item_id = ?";
+
+            jdbcTemplate.update(reduceStockSql, quantity, sourceFacilityId, itemId);
+
+            // Add to destination
+            String addStockSql = "UPDATE ECOPATH_DB.PUBLIC.fact_inventory " +
+                    "SET current_stock = current_stock + ?, " +
+                    "    last_updated = CURRENT_TIMESTAMP() " +
+                    "WHERE facility_id = ? AND item_id = ?";
+
+            jdbcTemplate.update(addStockSql, quantity, destFacilityId, itemId);
+
+            System.out.println("Approved redistribution: " + recommendationId);
+
+            return "Redistribution approved successfully! Stock updated.";
 
         } catch (Exception e) {
+            System.err.println("Error approving recommendation: " + e.getMessage());
+            e.printStackTrace();
             return "Error: " + e.getMessage();
         }
     }
