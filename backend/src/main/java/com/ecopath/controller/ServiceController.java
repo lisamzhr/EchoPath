@@ -348,12 +348,12 @@ public class ServiceController {
                     "       r.approved_by, " +
                     "       r.approved_at, " +
                     "       r.created_at " +
-                    "FROM ECOPATH_DB.PUBLIC.fact_redistribution_recommendations r " +
+                    "FROM ECOPATH_DB.PUBLIC.ANALYTICS_REDISTRIBUTION_RECOMMENDATIONS r " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
                     "  ON r.source_facility_id = fs.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
                     "  ON r.destination_facility_id = fd.facility_id " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +  // FIX: Ganti dari dim_inventory_items
+                    "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
                     "  ON r.item_id = m.item_id " +
                     "WHERE r.status = 'APPROVED' " +
                     "ORDER BY r.approved_at DESC " +
