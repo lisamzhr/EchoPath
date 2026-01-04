@@ -71,6 +71,41 @@ public class TestController {
         return response;
     }
 
+    /**
+     * Get ALL facilities (no limit)
+     */
+    @GetMapping("/facilities")
+    public Map<String, Object> getAllFacilities() {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            String sql = "SELECT " +
+                    "facility_id, " +
+                    "facility_name, " +
+                    "facility_type, " +
+                    "district, " +
+                    "province, " +
+                    "latitude, " +
+                    "longitude, " +
+                    "population_coverage, " +
+                    "accessibility_score " +
+                    "FROM dim_health_facilities " +
+                    "ORDER BY facility_id";
+
+            List<Map<String, Object>> facilities = jdbcTemplate.queryForList(sql);
+
+            response.put("status", "SUCCESS");
+            response.put("count", facilities.size());
+            response.put("data", facilities);
+
+        } catch (Exception e) {
+            response.put("status", "FAILED");
+            response.put("error", e.getMessage());
+        }
+
+        return response;
+    }
+
 
     /**
      * Get ALL inventory data (no limit)
