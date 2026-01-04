@@ -341,7 +341,7 @@ public class ServiceController {
             String sql = "SELECT r.recommendation_id, " +
                     "       fs.facility_name as source_facility, " +
                     "       fd.facility_name as destination_facility, " +
-                    "       i.item_name, " +
+                    "       m.item_name, " +
                     "       r.quantity_to_move, " +
                     "       r.priority_score, " +
                     "       r.status, " +
@@ -353,10 +353,11 @@ public class ServiceController {
                     "  ON r.source_facility_id = fs.facility_id " +
                     "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
                     "  ON r.destination_facility_id = fd.facility_id " +
-                    "JOIN ECOPATH_DB.PUBLIC.dim_inventory_items i " +
-                    "  ON r.item_id = i.item_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +  // FIX: Ganti dari dim_inventory_items
+                    "  ON r.item_id = m.item_id " +
                     "WHERE r.status = 'APPROVED' " +
-                    "ORDER BY r.approved_at DESC";
+                    "ORDER BY r.approved_at DESC " +
+                    "LIMIT 50";
 
             List<Map<String, Object>> redistributions = jdbcTemplate.queryForList(sql);
 

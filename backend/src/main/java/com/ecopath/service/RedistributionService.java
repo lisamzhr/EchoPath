@@ -165,22 +165,49 @@ public class RedistributionService {
      * Get pending recommendations
      */
     public List<Map<String, Object>> getPendingRecommendations() {
-        String sql = "SELECT r.recommendation_id, " +
-                "f1.facility_name as from_facility, " +
-                "f2.facility_name as to_facility, " +
-                "m.item_name, r.recommended_quantity, " +
-                "r.priority_score, r.reason, r.created_at " +
-                "FROM ECOPATH_DB.PUBLIC.analytics_redistribution_recommendations r " +
-                "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f1 " +
-                "  ON r.from_facility_id = f1.facility_id " +
-                "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities f2 " +
-                "  ON r.to_facility_id = f2.facility_id " +
-                "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
-                "  ON r.item_id = m.item_id " +
-                "WHERE r.status = 'PENDING' " +
-                "ORDER BY r.priority_score DESC";
+        try {
+            String sql = "SELECT " +
+                    "r.recommendation_id, " +
+                    "r.source_facility_id, " +
+                    "r.destination_facility_id, " +
+                    "r.item_id, " +
+                    "r.quantity_to_move, " +
+                    "r.priority_score, " +
+                    "r.status, " +
+                    "r.created_at, " +
+                    // FIX: Tambahkan alias yang match dengan frontend
+                    "fs.facility_name as from_facility_name, " +
+                    "fd.facility_name as to_facility_name, " +
+                    "m.item_name, " +
+                    // Current stock info
+                    "inv_from.current_stock as from_current_stock, " +
+                    "inv_to.current_stock as to_current_stock, " +
+                    // After stock calculation
+                    "(inv_from.current_stock - r.quantity_to_move) as from_after_stock, " +
+                    "(inv_to.current_stock + r.quantity_to_move) as to_after_stock " +
+                    "FROM ECOPATH_DB.PUBLIC.fact_redistribution_recommendations r " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fs " +
+                    "  ON r.source_facility_id = fs.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_health_facilities fd " +
+                    "  ON r.destination_facility_id = fd.facility_id " +
+                    "JOIN ECOPATH_DB.PUBLIC.dim_medical_items m " +
+                    "  ON r.item_id = m.item_id " +
+                    "LEFT JOIN ECOPATH_DB.PUBLIC.fact_inventory inv_from " +
+                    "  ON r.source_facility_id = inv_from.facility_id " +
+                    "  AND r.item_id = inv_from.item_id " +
+                    "LEFT JOIN ECOPATH_DB.PUBLIC.fact_inventory inv_to " +
+                    "  ON r.destination_facility_id = inv_to.facility_id " +
+                    "  AND r.item_id = inv_to.item_id " +
+                    "WHERE r.status = 'PENDING' " +
+                    "ORDER BY r.priority_score DESC, r.created_at DESC";
 
-        return jdbcTemplate.queryForList(sql);
+            return jdbcTemplate.queryForList(sql);
+
+        } catch (Exception e) {
+            System.err.println("Error getting pending recommendations: " + e.getMessage());
+            e.printStackTrace();
+            return List.of();
+        }
     }
 
     /**
