@@ -47,30 +47,6 @@ public class TestController {
         return response;
     }
 
-    @GetMapping("/facilities")
-    public Map<String, Object> getFacilities() {
-        Map<String, Object> response = new HashMap<>();
-
-        try {
-            String sql = "SELECT facility_id, facility_name, district, province " +
-                    "FROM dim_health_facilities LIMIT 5";
-
-            List<Map<String, Object>> facilities = jdbcTemplate.queryForList(sql);
-
-            response.put("status", "SUCCESS");
-            response.put("count", facilities.size());
-            response.put("data", facilities);
-
-            System.out.println("Fetched " + facilities.size() + " facilities from Snowflake");
-
-        } catch (Exception e) {
-            response.put("status", "FAILED");
-            response.put("error", e.getMessage());
-        }
-
-        return response;
-    }
-
     /**
      * Get ALL facilities (no limit)
      */
